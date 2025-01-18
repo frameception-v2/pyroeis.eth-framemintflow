@@ -7,6 +7,8 @@ import sdk, {
   type Context,
 } from "@farcaster/frame-sdk";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "~/components/ui/card";
+import { Button } from "~/components/ui/button";
+import { toast } from "~/components/ui/use-toast";
 
 import { config } from "~/components/providers/WagmiProvider";
 import { PurpleButton } from "~/components/ui/PurpleButton";
@@ -17,19 +19,97 @@ import { createStore } from "mipd";
 import { Label } from "~/components/ui/label";
 import { PROJECT_TITLE } from "~/lib/constants";
 
-function ExampleCard() {
+function MintCard({ context }: { context: Context.FrameContext }) {
+  const [isMinting, setIsMinting] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+
+  useEffect(() => {
+    if (context?.interaction) {
+      setIsLiked(context.interaction.liked);
+      setIsFollowing(context.interaction.following);
+    }
+  }, [context]);
+
+  const handleMint = useCallback(async () => {
+    if (!context?.user) {
+      toast({
+        title: "Error",
+        description: "Please connect your wallet first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isLiked || !isFollowing) {
+      toast({
+        title: "Requirements not met",
+        description: "Please like and follow to mint",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsMinting(true);
+      
+      // Call Zora mint API
+      const response = await fetch(ZORA_MINT_API, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          collectionAddress: ZORA_COLLECTION_ADDRESS,
+          recipient: context.user.address,
+          metadata: {
+            name: "FrameMintFlow Artwork",
+            description: "Minted via FrameMintFlow by pyroeis.eth 🦄",
+            image: context.frame.imageUrl,
+          }
+        })
+      });
+
+      if (!response.ok) throw new Error('Mint failed');
+
+      toast({
+        title: "Success!",
+        description: "Your NFT has been minted on Zora",
+      });
+    } catch (error) {
+      toast({
+        title: "Mint Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsMinting(false);
+    }
+  }, [context, isLiked, isFollowing]);
+
   return (
     <Card className="border-neutral-200 bg-white">
       <CardHeader>
-        <CardTitle className="text-neutral-900">Welcome to the Frame Template</CardTitle>
+        <CardTitle className="text-neutral-900">FrameMintFlow</CardTitle>
         <CardDescription className="text-neutral-600">
-          This is an example card that you can customize or remove
+          Mint your liked images on Zora
         </CardDescription>
       </CardHeader>
       <CardContent className="text-neutral-800">
-        <p>
-          Your frame content goes here. The text is intentionally dark to ensure good readability.
-        </p>
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <span>Like: {isLiked ? "✅" : "❌"}</span>
+            <span>Follow: {isFollowing ? "✅" : "❌"}</span>
+          </div>
+          
+          <Button 
+            onClick={handleMint}
+            disabled={!isLiked || !isFollowing || isMinting}
+            className="w-full"
+          >
+            {isMinting ? "Minting..." : "Mint on Zora"}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -137,7 +217,7 @@ export default function Frame(
     >
       <div className="w-[300px] mx-auto py-2 px-2">
         <h1 className="text-2xl font-bold text-center mb-4 text-neutral-900">{title}</h1>
-        <ExampleCard />
+        <MintCard context={context} />
       </div>
     </div>
   );
